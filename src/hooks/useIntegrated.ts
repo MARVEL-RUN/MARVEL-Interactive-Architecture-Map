@@ -5,7 +5,8 @@ import { WIRE_EDGE_MAP, WIRE_SCENARIOS } from "@/data/integrated";
 
 const STEP_MS = 3400;
 
-export function useIntegrated() {
+/** `active` = the integrated tab is visible; the step timer stays off otherwise. */
+export function useIntegrated(active: boolean) {
   const [pos, setPos] = useState({ s: 0, i: 0 });
   const [playing, setPlaying] = useState(true);
 
@@ -28,10 +29,10 @@ export function useIntegrated() {
   }, []);
 
   useEffect(() => {
-    if (!playing) return;
+    if (!active || !playing) return;
     const t = window.setInterval(nextStep, STEP_MS);
     return () => window.clearInterval(t);
-  }, [playing, nextStep]);
+  }, [active, playing, nextStep]);
 
   const { trailEdges, activeNodes, focusNodes } = useMemo(() => {
     const trail = new Set<string>();

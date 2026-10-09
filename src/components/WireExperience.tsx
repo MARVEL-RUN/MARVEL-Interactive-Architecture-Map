@@ -88,8 +88,8 @@ export function WireExperience() {
   const [envId, setEnvId] = useState<string | null>(null);
   const [envPicked, setEnvPicked] = useState<Record<string, string>>({});
 
-  const git = useGitDiagram();
-  const wire = useIntegrated();
+  const git = useGitDiagram(view === "gitdiagram");
+  const wire = useIntegrated(view === "integrated");
 
   const envHighlight = useMemo(() => {
     const sw = envOpen && envId ? ENV_SWITCH_MAP.get(envId) : undefined;

@@ -12,7 +12,8 @@ const SCENE_MS = 8200;
 
 export type GitRepoId = "frontend" | "backend";
 
-export function useGitDiagram() {
+/** `active` = the GitDiagram tab is visible; timers stay off otherwise. */
+export function useGitDiagram(active: boolean) {
   const [repo, setRepo] = useState<GitRepoId>("frontend");
   const [flowIndex, setFlowIndex] = useState(0);
   const [playing, setPlaying] = useState(true);
@@ -34,10 +35,10 @@ export function useGitDiagram() {
   }, [repo]);
 
   useEffect(() => {
-    if (!playing || flow.edgeIds.length < 2) return;
+    if (!active || !playing || flow.edgeIds.length < 2) return;
     const t = window.setInterval(() => setEdgeTick((n) => n + 1), FLOW_MS);
     return () => window.clearInterval(t);
-  }, [playing, flow.edgeIds.length, repo, flowIndex]);
+  }, [active, playing, flow.edgeIds.length, repo, flowIndex]);
 
   const nextFlow = useCallback(() => {
     setFlowIndex((i) => (i + 1) % diagram.flows.length);
@@ -45,10 +46,10 @@ export function useGitDiagram() {
   }, [diagram.flows.length]);
 
   useEffect(() => {
-    if (!playing) return;
+    if (!active || !playing) return;
     const t = window.setInterval(nextFlow, SCENE_MS);
     return () => window.clearInterval(t);
-  }, [playing, nextFlow, flowIndex]);
+  }, [active, playing, nextFlow, flowIndex]);
 
   const prevFlow = useCallback(() => {
     setFlowIndex((i) => (i - 1 + diagram.flows.length) % diagram.flows.length);
