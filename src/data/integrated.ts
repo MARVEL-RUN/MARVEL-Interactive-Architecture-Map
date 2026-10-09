@@ -78,9 +78,10 @@ const C = {
   data: "#a78bfa",
   ext: "#38bdf8",
   deploy: "#94a3b8",
+  server: "#fb923c",
 };
 
-export const WIRE_SIZE = { w: 2660, h: 1560 };
+export const WIRE_SIZE = { w: 2660, h: 1900 };
 
 export const WIRE_ZONES: WireZone[] = [
   { id: "users", label: "사용자", accent: C.user, x: 40, y: 80, w: 220, h: 1200 },
@@ -91,6 +92,7 @@ export const WIRE_ZONES: WireZone[] = [
   { id: "svc", label: "Service · 트랜잭션", accent: C.svc, x: 1860, y: 80, w: 460, h: 1200 },
   { id: "data", label: "데이터 · 외부 서비스", accent: C.data, x: 2360, y: 80, w: 260, h: 1200 },
   { id: "deploy", label: "배포 파이프라인", accent: C.deploy, x: 300, y: 1330, w: 2320, h: 180 },
+  { id: "server", label: "운영 서버 · Cafe24 개발언어 VPS (Ubuntu 24.04)", accent: C.server, x: 300, y: 1550, w: 2320, h: 300 },
 ];
 
 const A = 420;
@@ -1134,6 +1136,7 @@ export const WIRE_NODES: WireNode[] = [
         "게시판: notice · question · answer · attachment",
         "계정: user · admin · role",
         "datasource 설정은 API-KEY.yml에서 import",
+        "드라이버 mysql-connector-j · 운영 VPS 패널 기본 DB는 MariaDB 11.4 (실제 연결 대상은 API-KEY.yml로 확인)",
       ],
     },
   },
@@ -1255,13 +1258,246 @@ export const WIRE_NODES: WireNode[] = [
     y: 1430,
     detail: {
       summary:
-        "SSM Run Command로 서버에 명령을 보내 compose로 frontend(nginx) · user-backend · admin-backend 컨테이너를 갱신합니다. 테스트는 AWS EC2(i-…), 운영은 SSM Hybrid Managed Node로 등록된 Cafe24 서버(mi-…)입니다.",
+        "SSM Run Command로 서버에 명령을 보내 compose로 frontend(nginx) · user-backend · admin-backend 컨테이너를 갱신합니다. 테스트는 AWS EC2(i-…), 운영은 SSM Hybrid Managed Node로 등록된 Cafe24 VPS(mi-…)입니다. 운영 서버 내부는 아래 「운영 서버」 구역에서 펼쳐 볼 수 있습니다.",
       notes: [
         "프론트 배포에 S3/CloudFront는 쓰지 않음",
         "nginx: try_files $uri $uri.html $uri/ =404",
         "테스트 API-KEY.yml: EC2 Instance Connect + scp로 전달",
         "운영 API-KEY.yml: age로 암호화 → SSM 명령 안에서 복호화·sha256 검증",
         "도메인: 운영 marvelrunkorea2026.com · 테스트 marathontest2026.duckdns.org",
+      ],
+    },
+  },
+
+  // ── 운영 서버 (Cafe24 VPS) — 패널 화면 + 배포 워크플로 기준
+  {
+    id: "srv-fw",
+    label: "Cafe24 방화벽",
+    sub: "80 · 443 공개 · 22 · 3306 관리 IP",
+    icon: "shield",
+    accent: C.server,
+    zone: "server",
+    x: A,
+    y: 1640,
+    detail: {
+      summary:
+        "Cafe24 패널의 서버 방화벽입니다. 누구나 들어올 수 있는 포트는 80(HTTP)·443(HTTPS)뿐이고, SSH(22)와 DB(3306)는 등록한 관리 IP 2개에서만 받습니다. 나머지 인바운드는 모두 DROP, 아웃바운드는 전부 허용입니다.",
+      notes: [
+        "INBOUND 모든 IP: https TCP 443 · http TCP 80 · 그 외 ANY DROP",
+        "INBOUND 특정 IP: mysql TCP 3306 · SSH TCP 22 (관리 IP 2개) · 그 외 ANY DROP",
+        "OUTBOUND: ANY ACCEPT — Toss API · ECR pull · SSM 에이전트 통신에 필요",
+        "8080(API) · 9090(Actuator)은 외부에 열려 있지 않음 → 서버 안에서만 접근",
+        "INBOUND + OUTBOUND 합쳐 규칙 25개 제한",
+        "관리 IP가 바뀌면 SSH·DB 접속이 막히므로 패널에서 먼저 갱신",
+      ],
+    },
+  },
+  {
+    id: "srv-nginx",
+    label: "호스트 Nginx",
+    sub: ":80 → 127.0.0.1:8080 · SSL 별도",
+    icon: "route",
+    accent: C.server,
+    zone: "server",
+    x: L,
+    y: 1640,
+    detail: {
+      summary:
+        "Cafe24 개발언어 VPS가 기본으로 깔아 주는 리버스 프록시입니다. 패널 기준 :80을 받아 127.0.0.1:8080(Spring Boot)으로 넘기고, 보안 헤더 자동 적용 · WebSocket 지원, HTTPS 인증서는 별도로 붙여야 합니다.",
+      notes: [
+        "패널: Nginx :80 (HTTP) · proxy_pass 127.0.0.1:8080 · HTTPS = SSL 인증서 별도",
+        "확인 필요: frontend 컨테이너도 내부 80을 쓰므로 호스트 80을 누가 잡는지 (ss -ltnp)",
+        "확인 필요: /api · /admin-api 를 각 컨테이너 포트로 나누는 location 설정 (nginx -T)",
+        "TLS를 여기서 끝낸다면 X-Forwarded-Proto/For 헤더를 넘겨야 함 — 백엔드가 forward-headers-strategy: framework",
+        "백엔드 yml 주석은 'ALB X-Forwarded-*' (AWS 시절 문구) — Cafe24에선 이 Nginx가 그 역할",
+      ],
+    },
+  },
+  {
+    id: "srv-front",
+    label: "frontend 컨테이너",
+    sub: "nginx:alpine · out/ 정적 파일",
+    icon: "layout",
+    accent: C.server,
+    zone: "server",
+    x: E,
+    y: 1640,
+    detail: {
+      summary:
+        "ECR marvelrun/frontend 이미지를 frontend-compose.yml로 띄웁니다. 컨테이너 안 nginx가 :80에서 Next.js static export(out/)를 그대로 서빙합니다. 서버 런타임(Node)은 없습니다.",
+      files: ["MARVEL-RUN/Dockerfile", "MARVEL-RUN/frontend-nginx.conf", "/opt/marvelrun/frontend-compose.yml (서버에만 있음)"],
+      notes: [
+        "배포: docker compose -f frontend-compose.yml pull frontend → up -d --no-deps frontend",
+        "NEXT_PUBLIC_* 는 이미지 빌드 때 고정 — 서버에서 바꿔도 반영 안 됨",
+        "404는 /404.html (internal)",
+      ],
+    },
+  },
+  {
+    id: "srv-user",
+    label: "user-backend 컨테이너",
+    sub: "user-app.jar · 8080 / 9090",
+    icon: "server",
+    accent: C.server,
+    zone: "server",
+    x: CA,
+    y: 1640,
+    detail: {
+      summary:
+        "ECR marvelrun/backend 이미지(user/Dockerfile)를 backend-compose.yml의 user-backend 서비스로 띄웁니다. 8080에서 /api, 9090에서 Actuator를 받고, /app/API-KEY.yml로 시크릿을 읽습니다.",
+      files: ["user/Dockerfile", "user/src/main/resources/application.yml", "/opt/marvelrun/backend-compose.yml (서버에만 있음)"],
+      notes: [
+        "Temurin 21 JRE · TZ=Asia/Seoul · EXPOSE 8080, 9090",
+        "/livez · /readyz 는 8080에도 추가 노출 (add-additional-paths)",
+        "첨부파일: /app/data/attachments — 볼륨으로 빼지 않으면 컨테이너 교체 시 유실",
+        "배포 후 sleep 5 → docker inspect로 Running 여부만 확인 (/readyz 대기는 없음)",
+      ],
+    },
+  },
+  {
+    id: "srv-admin",
+    label: "admin-backend 컨테이너",
+    sub: "admin-app.jar · 8080 / 9090",
+    icon: "admin",
+    accent: C.server,
+    zone: "server",
+    x: CB,
+    y: 1640,
+    detail: {
+      summary:
+        "같은 서버에서 admin/Dockerfile 이미지를 admin-backend 서비스로 띄웁니다. 컨테이너 안에서는 user와 똑같이 8080/9090을 쓰므로, 호스트에서는 서로 다른 포트로 매핑하거나 compose 내부 네트워크로만 연결해야 합니다.",
+      files: ["admin/Dockerfile", "admin/src/main/resources/application.yml", "/opt/marvelrun/backend-compose.yml (서버에만 있음)"],
+      notes: [
+        "context-path /admin-api · Toss read-timeout 30s",
+        "시크릿: /opt/marvelrun/secrets/admin/API-KEY.yml (user와 별도 파일)",
+        "확인 필요: 호스트 포트 매핑 (docker compose ps)",
+      ],
+    },
+  },
+  {
+    id: "srv-redis",
+    label: "Redis 컨테이너",
+    sub: "compose 서비스명으로 접속",
+    icon: "bolt",
+    accent: C.server,
+    zone: "server",
+    x: SB,
+    y: 1640,
+    detail: {
+      summary:
+        "백엔드 yml의 Redis host가 ${redis.secret.compose_name}이라, 같은 compose 네트워크 안의 Redis 컨테이너를 서비스 이름으로 찾습니다. 관리자 JWT(refresh 화이트리스트 · access 블랙리스트)만 저장합니다.",
+      files: ["user/src/main/resources/application.yml (spring.data.redis)", "admin/src/main/resources/application.yml"],
+      notes: ["port 6379 (로컬 개발은 6380)", "방화벽에 6379는 없음 → 외부 비노출", "비밀번호: redis.secret.password (API-KEY.yml)"],
+    },
+  },
+  {
+    id: "srv-mariadb",
+    label: "MariaDB 11.4",
+    sub: "127.0.0.1:3306 · 패널 기본 DB",
+    icon: "database",
+    accent: C.server,
+    zone: "server",
+    x: D,
+    y: 1640,
+    detail: {
+      summary:
+        "Cafe24 패널이 보여 주는 기본 DB입니다. MariaDB 11.4, 127.0.0.1:3306에만 바인드, DB appdb · 사용자 appuser · utf8mb4, 접속 정보는 DATABASE_URL로 자동 주입되는 구성입니다. 백엔드는 mysql-connector-j로 붙고 실제 datasource URL은 API-KEY.yml에 있습니다.",
+      notes: [
+        "확인 필요: 운영 앱이 이 호스트 MariaDB를 쓰는지, 별도 DB를 쓰는지 (API-KEY.yml의 url)",
+        "컨테이너에서 호스트 127.0.0.1에 붙으려면 host 네트워크 또는 host-gateway 설정 필요",
+        "bind가 127.0.0.1이면 방화벽의 3306 허용 규칙은 사실상 효과 없음 — 원격 접속은 SSH 터널",
+        "spring.sql.init.mode: never · ddl-auto: none → 스키마는 수동 관리",
+      ],
+    },
+  },
+  {
+    id: "srv-spec",
+    label: "VPS 사양 · 계약",
+    sub: "6 vCPU · 16GB · 320GB · 8TB",
+    icon: "gauge",
+    accent: C.server,
+    zone: "server",
+    x: A,
+    y: 1770,
+    detail: {
+      summary:
+        "Cafe24 「개발언어 VPS 호스팅 DEV D」 한 대에 프론트·백엔드·Redis가 함께 올라갑니다. 서버가 하나라 이 VPS가 멈추면 전체 서비스가 같이 멈춥니다.",
+      notes: [
+        "CPU 6 · RAM 16GB · DISK 320GB · 월 트래픽 8TB",
+        "OS Ubuntu 24.04 LTS · 접속 계정 root",
+        "서비스 기간 ~ 2026-12-03 · 자동연장 미사용 (패널 기준) → 만료 전 연장 필요",
+        "트래픽 초과 시 110원/GB (VAT 포함)",
+        "기본 도메인 {아이디}.mycafe24.com 은 무료 HTTPS 자동, 보유 도메인은 SSL 별도",
+      ],
+    },
+  },
+  {
+    id: "srv-systemd",
+    label: "Cafe24 기본 스택",
+    sub: "systemd MarvelRun_2026 · fat JAR",
+    icon: "layers",
+    accent: C.server,
+    zone: "server",
+    x: L,
+    y: 1770,
+    detail: {
+      summary:
+        "패널의 「Java OpenJDK 21 + Spring Boot 3.5」 스택입니다. 코드를 /opt/MarvelRun_2026/에 두고 appuser 계정으로 systemd 서비스(MarvelRun_2026)가 fat JAR를 127.0.0.1:8080에 띄우는 템플릿입니다. 우리 배포 워크플로는 이 경로가 아니라 /opt/marvelrun + docker compose를 씁니다.",
+      notes: [
+        "패널: Runtime OpenJDK 21 · Gradle 8 (wrapper) · Process systemd · Bind 127.0.0.1:8080",
+        "프로젝트명 MarvelRun_2026 = 디렉터리·서비스 이름 (변경 불가)",
+        "확인 필요: 이 systemd 서비스가 지금도 켜져 있는지 — 켜져 있으면 8080을 컨테이너와 다툼",
+        "점검: systemctl status MarvelRun_2026 · journalctl -u MarvelRun_2026 -f",
+      ],
+    },
+  },
+  {
+    id: "srv-dir",
+    label: "/opt/marvelrun",
+    sub: "compose · secrets · 배포 작업 폴더",
+    icon: "file",
+    accent: C.server,
+    zone: "server",
+    x: CA,
+    y: 1770,
+    detail: {
+      summary:
+        "배포 워크플로가 SSM 명령으로 들어와 작업하는 폴더입니다. compose 파일이 여기 있고, 시크릿은 secrets/ 아래에 root 소유 600 권한으로 놓입니다. compose 파일 내용은 repo에 없고 서버에만 있습니다.",
+      files: [
+        "/opt/marvelrun/frontend-compose.yml",
+        "/opt/marvelrun/backend-compose.yml",
+        "/opt/marvelrun/secrets/API-KEY.yml (폴더 700 · 파일 root 600)",
+        "/opt/marvelrun/secrets/admin/API-KEY.yml",
+      ],
+      notes: [
+        "운영: age 암호문 → /etc/marvelrun/age/production.key 로 복호화 → sha256 검증 후 mv",
+        "배포 때마다 임시 DOCKER_CONFIG로 ECR 로그인 → 끝나면 logout · image prune",
+        "Cafe24 기본 스택 경로(/opt/MarvelRun_2026)와 다른 폴더",
+      ],
+    },
+  },
+  {
+    id: "srv-ssm",
+    label: "SSM Agent",
+    sub: "Hybrid Managed Node · mi-…",
+    icon: "cloud",
+    accent: C.server,
+    zone: "server",
+    x: SA,
+    y: 1770,
+    detail: {
+      summary:
+        "Cafe24 서버에 설치된 AWS SSM 에이전트가 이 VPS를 AWS의 Hybrid Managed Node(mi-…)로 등록합니다. GitHub Actions가 OIDC로 AWS 역할을 받은 뒤 ssm send-command로 이 노드에 쉘 명령을 보냅니다. SSH 포트를 GitHub에 열 필요가 없습니다.",
+      files: [
+        "MARVEL-RUN/.github/workflows/prod-deploy.yml",
+        "MARVEL-Backend-develop/.github/workflows/prod-deploy-user.yml",
+        "MARVEL-Backend-develop/.github/workflows/prod-admin-deploy.yml",
+      ],
+      env: ["vars.PROD_SSM_MANAGED_NODE_ID (^mi-[a-f0-9]+$)", "vars.PROD_AWS_ROLE_ARN", "vars.PROD_SECRET_AGE_RECIPIENT", "secrets.PROD_API_KEY_CONTENT"],
+      notes: [
+        "document: AWS-RunShellScript · aws ssm wait command-executed 로 결과 대기",
+        "에이전트는 아웃바운드로 AWS에 붙음 → 방화벽 OUTBOUND ANY 덕분에 동작",
+        "테스트 서버는 EC2(i-…) + Instance Connect/scp 방식이라 경로가 다름",
       ],
     },
   },
@@ -1369,6 +1605,26 @@ export const WIRE_EDGES: WireEdge[] = [
   { id: "ec2-admin", from: "dp-ec2", to: "api-admin", label: "admin-backend", kind: "deploy", dashed: true },
   { id: "ec2-secrets", from: "dp-ec2", to: "d-secrets", label: "age 복호화", kind: "deploy", dashed: true },
   { id: "gh-env", from: "dp-gh", to: "l-env", label: "build-arg 주입", kind: "deploy", dashed: true },
+
+  // 운영 서버 내부 — 점선은 패널·워크플로만으로는 확정되지 않은 연결
+  { id: "ec2-ssm", from: "dp-ec2", to: "srv-ssm", label: "ssm send-command", kind: "deploy" },
+  { id: "ssm-dir", from: "srv-ssm", to: "srv-dir", label: "secrets 배치 · compose up", kind: "deploy" },
+  { id: "dir-front", from: "srv-dir", to: "srv-front", label: "frontend-compose", kind: "deploy", dashed: true },
+  { id: "dir-user", from: "srv-dir", to: "srv-user", label: "backend-compose", kind: "deploy", dashed: true },
+  { id: "dir-admin", from: "srv-dir", to: "srv-admin", label: "backend-compose", kind: "deploy", dashed: true },
+  { id: "u-front", from: "u-runner", to: "srv-fw", label: "HTTPS 443 · 페이지 · API", kind: "http" },
+  { id: "fw-nginx", from: "srv-fw", to: "srv-nginx", label: "80 · 443 통과", kind: "http" },
+  { id: "srvuser-api", from: "srv-user", to: "api-user", label: "컨테이너 안 앱", kind: "deploy" },
+  { id: "srvadmin-api", from: "srv-admin", to: "api-admin", label: "컨테이너 안 앱", kind: "deploy" },
+  { id: "srvredis-redis", from: "srv-redis", to: "d-redis", label: "같은 Redis", kind: "deploy", dashed: true },
+  { id: "nginx-front", from: "srv-nginx", to: "srv-front", label: "정적 페이지", kind: "http", dashed: true },
+  { id: "nginx-user", from: "srv-nginx", to: "srv-user", label: "/api", kind: "http", dashed: true },
+  { id: "nginx-admin", from: "srv-nginx", to: "srv-admin", label: "/admin-api", kind: "http", dashed: true },
+  { id: "user-redis", from: "srv-user", to: "srv-redis", label: "compose 네트워크", kind: "db" },
+  { id: "admin-redis", from: "srv-admin", to: "srv-redis", label: "JWT 토큰", kind: "db" },
+  { id: "user-mariadb", from: "srv-user", to: "srv-mariadb", label: "datasource?", kind: "db", dashed: true },
+  { id: "systemd-nginx", from: "srv-systemd", to: "srv-nginx", label: "기본 템플릿 :8080", kind: "config", dashed: true },
+  { id: "spec-fw", from: "srv-spec", to: "srv-fw", label: "패널 관리", kind: "config", dashed: true },
 ];
 
 export const WIRE_SCENARIOS: Scenario[] = [
@@ -1379,7 +1635,7 @@ export const WIRE_SCENARIOS: Scenario[] = [
     steps: [
       { edge: "u-reg", title: "신청서 작성", detail: "참가자가 /register에서 개인 또는 단체 신청서를 씁니다. RegistrationGate가 접수 기간인지 먼저 확인합니다." },
       { edge: "reg-fetch", title: "신청 제출", detail: "createRegistration이 POST v1/public/events/{eventId}/registrations 를 만듭니다." },
-      { edge: "fetch-api", title: "공개 API 호출", detail: "mainFetch가 NEXT_PUBLIC_API_BASE_URL(/api)로 보냅니다. /v1/public/** 는 permitAll이라 토큰이 없습니다." },
+      { edge: "fetch-api", title: "공개 API 호출", detail: "mainFetch가 NEXT_PUBLIC_API_BASE_URL(/api)로 보냅니다. /v1/public/** 는 permitAll이라 토큰이 없습니다. 운영에서는 방화벽 → 호스트 Nginx → user-backend 컨테이너를 거칩니다(「운영 서버 요청 경로」)." },
       { edge: "api-creg", title: "Controller 도착", detail: "RegistrationCommandController가 요청 DTO를 @Valid로 검증합니다." },
       { edge: "creg-sreg", title: "신청 트랜잭션 시작", detail: "RegistrationCommandService.register(@Transactional): 대회를 잠그고 신청 정책과 가격을 계산합니다." },
       { edge: "sreg-cap", title: "정원 홀드", detail: "CapacityHoldService.holdAll이 같은 트랜잭션 안에서 capacity 카운터를 조건부 UPDATE합니다. 남는 자리가 없으면 여기서 실패합니다." },
@@ -1440,7 +1696,7 @@ export const WIRE_SCENARIOS: Scenario[] = [
     steps: [
       { edge: "a-login", title: "로그인 화면", detail: "토큰이 없으면 AuthInitializer가 /admin/login?next= 로 보냅니다." },
       { edge: "login-fetch", title: "로그인 요청", detail: "POST v1/admin/public/login { loginId, password }" },
-      { edge: "adminfetch-api", title: "Admin API", detail: "NEXT_PUBLIC_API_BASE_URL_ADMIN(/admin-api)로 갑니다." },
+      { edge: "adminfetch-api", title: "Admin API", detail: "NEXT_PUBLIC_API_BASE_URL_ADMIN(/admin-api)로 갑니다. 운영에서는 방화벽 → 호스트 Nginx → admin-backend 컨테이너를 거칩니다(「운영 서버 요청 경로」)." },
       { edge: "apiadmin-auth", title: "공개 인증 경로", detail: "/v1/admin/public/** 는 토큰 없이 받습니다." },
       { edge: "acauth-sauth", title: "AdminCommandService", detail: "BCrypt로 비밀번호를 확인합니다." },
       { edge: "sauth-db", title: "관리자 계정", detail: "admin · role 테이블" },
@@ -1514,6 +1770,26 @@ export const WIRE_SCENARIOS: Scenario[] = [
       { edge: "ec2-secrets", title: "시크릿 배치", detail: "API-KEY.yml을 /opt/marvelrun/secrets/ 에 둡니다. 운영은 age 암호문을 SSM 명령 안에서 풀고 sha256으로 검증, 테스트는 EC2 Instance Connect + scp." },
       { edge: "ec2-user", title: "user-backend", detail: "context-path /api, 8080 (actuator 9090)" },
       { edge: "ec2-admin", title: "admin-backend", detail: "context-path /admin-api" },
+      { edge: "ec2-ssm", title: "운영 VPS로 명령 전달", detail: "GitHub Actions가 OIDC로 받은 AWS 역할로 ssm send-command를 보내면, Cafe24 VPS의 SSM 에이전트(mi-…)가 AWS-RunShellScript로 실행합니다." },
+      { edge: "ssm-dir", title: "/opt/marvelrun 작업", detail: "age 복호화 → sha256 검증 → secrets/ 에 root 600으로 설치 → 임시 DOCKER_CONFIG로 ECR 로그인 → compose pull." },
+      { edge: "dir-user", title: "컨테이너 교체", detail: "up -d --no-deps --force-recreate user-backend, 5초 뒤 docker inspect로 Running만 확인하고 이미지 정리." },
+    ],
+  },
+  {
+    id: "prod-server",
+    title: "운영 서버 요청 경로",
+    summary: "참가자·운영자의 요청이 실제로 Cafe24 VPS의 어떤 관문을 지나 앱 코드에 닿는지. 다른 시나리오의 「API 호출」 단계 뒤에서 일어나는 일입니다. 점선은 서버에서 확인이 필요한 연결입니다.",
+    steps: [
+      { edge: "u-front", title: "참가자 접속", detail: "marvelrunkorea2026.com 으로 페이지와 API 요청이 모두 443(HTTPS)으로 들어옵니다. mainFetch도 브라우저에서 돌기 때문에 같은 문을 씁니다." },
+      { edge: "fw-nginx", title: "방화벽 → 호스트 Nginx", detail: "80·443만 모든 IP에 열려 있습니다(22·3306은 관리 IP 2개만, 나머지 DROP). 보유 도메인 HTTPS는 SSL 인증서를 따로 붙여야 하고, TLS를 여기서 끝낸다면 X-Forwarded-* 헤더를 넘겨야 합니다." },
+      { edge: "nginx-front", title: "페이지 받기", detail: "/register 같은 정적 HTML/JS는 frontend 컨테이너(nginx:alpine)가 응답하고, 이후 화면은 브라우저에서 실행됩니다. 호스트 Nginx와 컨테이너가 둘 다 80을 원하므로 실제 포트 배치는 확인 필요." },
+      { edge: "nginx-user", title: "/api 요청", detail: "신청 제출 · 조회 · 결제 승인 요청은 user-backend 컨테이너의 8080으로 갑니다. 8080은 방화벽에 없으니 반드시 서버 안 프록시를 거칩니다." },
+      { edge: "srvuser-api", title: "앱 코드 진입", detail: "컨테이너 안 user-app.jar가 User API입니다. 여기서부터는 「참가신청 → 결제 → 승인」 시나리오의 Controller 단계로 이어집니다." },
+      { edge: "user-mariadb", title: "DB", detail: "패널에는 MariaDB 11.4(127.0.0.1:3306)가 있지만, 백엔드 datasource는 API-KEY.yml에 있어 실제 대상은 서버에서 확인해야 합니다." },
+      { edge: "nginx-admin", title: "운영자 요청", detail: "/admin 화면의 adminFetch 요청은 /admin-api 로 admin-backend 컨테이너에 갑니다. 내부 포트가 user와 같은 8080이라 호스트 포트 매핑이 달라야 합니다." },
+      { edge: "srvadmin-api", title: "Admin API 진입", detail: "컨테이너 안 admin-app.jar가 Admin API입니다. 로그인 · 환불 배치 등 관리자 시나리오로 이어집니다." },
+      { edge: "admin-redis", title: "관리자 토큰", detail: "compose 서비스명으로 Redis에 붙어 refresh 화이트리스트 · access 블랙리스트를 읽고 씁니다." },
+      { edge: "systemd-nginx", title: "기본 스택 흔적", detail: "Cafe24 템플릿은 systemd MarvelRun_2026이 127.0.0.1:8080을 쓰는 구성입니다. 켜져 있다면 컨테이너와 포트가 겹칩니다." },
     ],
   },
 ];

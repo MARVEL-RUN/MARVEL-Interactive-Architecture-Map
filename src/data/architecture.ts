@@ -5,6 +5,8 @@ export type ArchScene = FlowStep;
 const CH_STRUCT = "구조";
 const CH_CONFIG = "설정·보안";
 const CH_OPS = "통신·배포";
+const CH_SERVER = "운영 서버 · Cafe24";
+const CH_SUMMARY = "정리";
 
 export const ARCH_STEPS: ArchScene[] = [
   {
@@ -464,7 +466,9 @@ export const ARCH_STEPS: ArchScene[] = [
     ],
     links: [
       { label: "통합 지도: 배포 서버", wire: "dp-ec2" },
+      { label: "통합 지도: SSM Agent", wire: "srv-ssm" },
       { label: "통합 지도: GitHub Actions", wire: "dp-gh" },
+      { label: "다음: 운영 서버 구성", scene: "server-host" },
     ],
     code: {
       file: "user/Dockerfile · prod-deploy-user.yml",
@@ -478,9 +482,229 @@ export const ARCH_STEPS: ArchScene[] = [
     },
   },
   {
+    id: "server-host",
+    chapter: CH_SERVER,
+    reelTitle: "A8 · SERVER",
+    headline: "Cafe24 VPS 한 대에 프론트 · 백엔드 · Redis",
+    body: "운영은 Cafe24 「개발언어 VPS 호스팅 DEV D」 한 대입니다. Cafe24 패널은 신청 때 고른 기본 스택(호스트 Nginx + systemd Spring Boot + MariaDB)을 보여 주고, 우리 배포 워크플로는 그 위에 SSM으로 들어와 /opt/marvelrun에서 docker compose 컨테이너를 교체합니다. 두 시점이 서로 다르니 아래 표를 나란히 보세요.",
+    activePath: ["browser", "api", "env-be", "db"],
+    envHighlight: "backend",
+    serverLoad: "idle",
+    traces: [
+      {
+        id: "vps",
+        layer: "env",
+        title: "VPS 1대",
+        detail: "Ubuntu 24.04 LTS · 6 vCPU · 16GB · 320GB · 월 8TB — 단일 장애점",
+      },
+      {
+        id: "agent",
+        layer: "env",
+        title: "SSM Hybrid 노드",
+        detail: "에이전트가 AWS에 mi-… 로 등록 → GitHub Actions가 ssm send-command",
+      },
+      {
+        id: "compose",
+        layer: "api",
+        title: "/opt/marvelrun",
+        detail: "frontend-compose.yml · backend-compose.yml · secrets/ (repo에 없음)",
+      },
+      {
+        id: "template",
+        layer: "api",
+        title: "Cafe24 기본 스택",
+        detail: "systemd MarvelRun_2026 · /opt/MarvelRun_2026 · appuser · fat JAR",
+      },
+    ],
+    table: {
+      caption: "같은 서버, 두 가지 시점",
+      head: ["계층", "Cafe24 패널", "배포 워크플로"],
+      rows: [
+        ["웹 진입", "호스트 Nginx :80 → 127.0.0.1:8080", "frontend 컨테이너 nginx :80"],
+        ["앱", "systemd MarvelRun_2026 (fat JAR)", "user-backend · admin-backend 컨테이너"],
+        ["폴더", "/opt/MarvelRun_2026 (appuser)", "/opt/marvelrun (root)"],
+        ["DB", "MariaDB 11.4 · appdb · 127.0.0.1", "API-KEY.yml datasource (mysql-connector-j)"],
+        ["Redis", "패널에 없음", "compose 서비스명으로 접속"],
+        ["시크릿", "DATABASE_URL 자동 주입", "/opt/marvelrun/secrets/API-KEY.yml"],
+      ],
+    },
+    stacks: [
+      {
+        title: "VPS 계약 (패널 기준)",
+        accent: "#fb923c",
+        items: [
+          { name: "상품", desc: "개발언어 VPS 호스팅 DEV D" },
+          { name: "기간", desc: "~ 2026-12-03 · 자동연장 꺼짐" },
+          { name: "트래픽", desc: "월 8TB · 초과 110원/GB" },
+          { name: "런타임", desc: "OpenJDK 21 · Spring Boot 3.5 · Gradle 8" },
+          { name: "프로젝트명", desc: "MarvelRun_2026 (변경 불가)" },
+        ],
+      },
+    ],
+    links: [
+      { label: "통합 지도: VPS 사양", wire: "srv-spec" },
+      { label: "통합 지도: /opt/marvelrun", wire: "srv-dir" },
+      { label: "통합 지도: Cafe24 기본 스택", wire: "srv-systemd" },
+    ],
+    code: {
+      file: "운영 VPS 배치 (패널 + 워크플로)",
+      lines: [
+        "/opt/marvelrun/",
+        "  frontend-compose.yml   → frontend (nginx:alpine)",
+        "  backend-compose.yml    → user-backend · admin-backend (Redis도 compose 네트워크)",
+        "  secrets/API-KEY.yml    (root 600)",
+        "  secrets/admin/API-KEY.yml",
+        "/opt/MarvelRun_2026/     ← Cafe24 기본 스택 (systemd)",
+        "/etc/marvelrun/age/production.key",
+      ],
+    },
+  },
+  {
+    id: "server-network",
+    chapter: CH_SERVER,
+    reelTitle: "A9 · NETWORK",
+    headline: "방화벽 → Nginx → 컨테이너",
+    body: "밖에서 들어올 수 있는 문은 80과 443 두 개뿐입니다. SSH(22)와 DB(3306)는 등록된 관리 IP에서만 열리고 나머지는 모두 DROP입니다. 그래서 8080(API)과 9090(Actuator)은 외부에서 직접 못 부르고, 반드시 서버 안 Nginx를 거칩니다. 나가는 방향은 전부 열려 있어 Toss API · ECR · SSM 통신이 됩니다.",
+    activePath: ["browser", "api", "toss"],
+    envHighlight: "backend",
+    serverLoad: "api",
+    packetFrom: "browser",
+    packetTo: "api",
+    traces: [
+      {
+        id: "fw",
+        layer: "client",
+        title: "Cafe24 방화벽",
+        detail: "INBOUND 80 · 443 ANY / 22 · 3306 관리 IP만 / 그 외 DROP",
+      },
+      {
+        id: "nginx",
+        layer: "api",
+        title: "호스트 Nginx",
+        detail: "보안 헤더 자동 · WebSocket 지원 · 보유 도메인 HTTPS는 SSL 별도",
+      },
+      {
+        id: "fwd",
+        layer: "api",
+        title: "X-Forwarded-*",
+        detail: "forward-headers-strategy: framework — 프록시가 Proto/For를 넘겨야 함",
+      },
+      {
+        id: "out",
+        layer: "pg",
+        title: "OUTBOUND ANY",
+        detail: "api.tosspayments.com · ECR pull · SSM 에이전트",
+      },
+    ],
+    table: {
+      caption: "Cafe24 방화벽 (규칙 25개 한도, IN+OUT 합산)",
+      head: ["방향", "포트", "허용 대상"],
+      rows: [
+        ["IN", "443 https", "모든 IP"],
+        ["IN", "80 http", "모든 IP"],
+        ["IN", "22 SSH", "관리 IP 2개"],
+        ["IN", "3306 mysql", "관리 IP 2개"],
+        ["IN", "그 외", "DROP"],
+        ["OUT", "전체", "ACCEPT"],
+      ],
+    },
+    stacks: [
+      {
+        title: "서버 안에서만 열린 포트",
+        accent: "#22c55e",
+        items: [
+          { name: "8080", desc: "user · admin API (컨테이너 내부)" },
+          { name: "9090", desc: "Actuator health · info · metrics" },
+          { name: "6379", desc: "Redis (compose 네트워크)" },
+          { name: "3306", desc: "MariaDB bind 127.0.0.1 (패널)" },
+        ],
+      },
+    ],
+    links: [
+      { label: "통합 지도: 방화벽", wire: "srv-fw" },
+      { label: "통합 지도: 호스트 Nginx", wire: "srv-nginx" },
+      { label: "통합 지도: Redis 컨테이너", wire: "srv-redis" },
+    ],
+    code: {
+      file: "요청 경로",
+      lines: [
+        "브라우저 ─443/80─► 방화벽 ─► 호스트 Nginx",
+        "  ├─ /           ─► frontend 컨테이너 (정적 HTML)",
+        "  ├─ /api        ─► user-backend :8080",
+        "  └─ /admin-api  ─► admin-backend :8080",
+        "관리자 PC ─22─► SSH (관리 IP만)",
+      ],
+    },
+  },
+  {
+    id: "server-check",
+    chapter: CH_SERVER,
+    reelTitle: "A10 · CHECK",
+    headline: "패널과 repo만으로는 안 보이는 것들",
+    body: "compose 파일과 Nginx 설정은 서버에만 있어서, 패널 화면과 repo를 맞춰 봐도 몇 군데는 비어 있습니다. 특히 호스트 Nginx와 frontend 컨테이너가 둘 다 80을, user·admin 컨테이너와 기본 systemd 앱이 모두 8080을 쓰려 합니다. 실제로 누가 어느 포트를 잡고 있는지 서버에서 한 번 확인해 두면 장애 때 헤매지 않습니다.",
+    activePath: ["api", "env-be", "db"],
+    envHighlight: "backend",
+    serverLoad: "idle",
+    traces: [
+      {
+        id: "port80",
+        layer: "api",
+        title: "80 포트 주인",
+        detail: "호스트 Nginx vs frontend 컨테이너 — 동시에 바인드 불가",
+      },
+      {
+        id: "port8080",
+        layer: "api",
+        title: "8080 겹침",
+        detail: "systemd MarvelRun_2026 · user · admin 컨테이너 모두 8080",
+      },
+      {
+        id: "db",
+        layer: "db",
+        title: "DB 실체",
+        detail: "호스트 MariaDB 11.4인지, 다른 DB인지 — API-KEY.yml url",
+      },
+      {
+        id: "renew",
+        layer: "env",
+        title: "계약 · 인증서",
+        detail: "VPS 자동연장 꺼짐 · 보유 도메인 SSL 만료일",
+      },
+    ],
+    table: {
+      head: ["확인할 것", "왜", "어떻게"],
+      rows: [
+        ["80 · 443 리슨", "Nginx와 frontend 컨테이너 충돌 여부", "ss -ltnp"],
+        ["Nginx 라우팅", "/api · /admin-api 분기 · X-Forwarded-Proto", "nginx -T"],
+        ["컨테이너 포트", "user · admin 둘 다 내부 8080", "docker compose ps"],
+        ["기본 systemd 앱", "켜져 있으면 8080 점유", "systemctl status MarvelRun_2026"],
+        ["DB 연결 대상", "MariaDB 11.4 + MySQL 드라이버 조합", "API-KEY.yml datasource.url"],
+        ["첨부파일 볼륨", "/app/data/attachments 교체 시 유실", "docker inspect (Mounts)"],
+        ["3306 규칙", "bind 127.0.0.1이면 원격 접속 불가", "SSH 터널 사용 여부"],
+        ["계약 만료", "자동연장 꺼짐 · ~2026-12-03", "Cafe24 패널"],
+      ],
+    },
+    links: [
+      { label: "통합 지도: MariaDB", wire: "srv-mariadb" },
+      { label: "통합 지도: user-backend 컨테이너", wire: "srv-user" },
+      { label: "통합 지도: 첨부파일 디스크", wire: "d-files" },
+    ],
+    code: {
+      file: "서버 점검 (SSH 접속 후)",
+      lines: [
+        "ss -ltnp | grep -E ':(80|443|8080|9090|3306|6379)'",
+        "nginx -T | grep -nE 'listen|server_name|proxy_pass|ssl_certificate'",
+        "cd /opt/marvelrun && docker compose -f backend-compose.yml ps",
+        "systemctl status MarvelRun_2026",
+        "journalctl -u MarvelRun_2026 -f",
+        "docker compose -f backend-compose.yml logs --tail 100 user-backend",
+      ],
+    },
+  },
+  {
     id: "comm-model",
-    chapter: CH_OPS,
-    reelTitle: "A8 · 통신",
+    chapter: CH_SUMMARY,
+    reelTitle: "A11 · 통신",
     headline: "4종 통신 경로 (env · REST · SDK · PG secret)",
     body: "(1) env는 각 런타임이 읽기만 합니다. (2) REST는 CORS로 허용된 도메인에서 JSON over HTTPS. (3) Toss SDK는 클라이언트 키로 결제창만 엽니다. (4) PG 승인·취소는 서버 RestClient + secret만 합니다. 이 네 갈래가 섞이지 않는 것이 전체 설계의 핵심입니다.",
     activePath: ["browser", "env-fe", "toss", "api", "env-be"],

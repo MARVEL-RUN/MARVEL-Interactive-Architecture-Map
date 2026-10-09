@@ -71,6 +71,8 @@ function resolveFlow(step: FlowStep, trace: FlowStep["traces"][number] | undefin
 
 const EMPTY = new Set<string>();
 const NO_SCENES: FlowStep[] = [];
+/** Wire-map edges longer than this don't fit on screen, so the camera jumps to the target node. */
+const LONG_EDGE = 900;
 /** NODE_LAYOUT spans roughly x 16–84 %, y 22–82 % of the network canvas. */
 const NETWORK_FIT = { w: 0.9, h: 0.72 };
 
@@ -169,7 +171,7 @@ export function WireExperience() {
     return () => window.clearInterval(t);
   }, [playing, index, step.traces.length, storyView]);
 
-  // Integrated view: follow camera to the current step's edge midpoint.
+  // Integrated view: follow camera to the current step's edge midpoint (long edges: the destination).
   const curEdge = WIRE_EDGE_MAP.get(wire.step.edge);
   useEffect(() => {
     if (view !== "integrated" || !envHighlight) return;
@@ -189,9 +191,10 @@ export function WireExperience() {
     const a = WIRE_NODE_MAP.get(curEdge.from);
     const b = WIRE_NODE_MAP.get(curEdge.to);
     if (!a || !b) return;
+    const long = Math.hypot(b.x - a.x, b.y - a.y) > LONG_EDGE;
     setFocus({
-      x: (a.x + b.x) / 2,
-      y: (a.y + b.y) / 2,
+      x: long ? b.x : (a.x + b.x) / 2,
+      y: long ? b.y : (a.y + b.y) / 2,
       key: `${wire.scenarioIndex}-${wire.stepIndex}`,
     });
   }, [view, follow, selected, envOpen, curEdge, wire.scenarioIndex, wire.stepIndex]);

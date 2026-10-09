@@ -22,8 +22,8 @@
 
 | 탭 | 내용 |
 |----|------|
-| **통합** | FE ↔ BE ↔ Toss ↔ DB를 한 지도(61 노드·94 엣지·8 시나리오). 노드 클릭 → 파일·엔드포인트·ENV·연관 노드. **ENV 스위치** 패널(on/off, 0/1/3, 모드). |
-| **아키텍처** | 8장면 — 개요, 프론트/백엔드, 보안·CORS, ENV 매트릭스, API 표면, 배포, 통신 4갈래. |
+| **통합** | FE ↔ BE ↔ Toss ↔ DB ↔ 운영 서버를 한 지도(72 노드·112 엣지·9 시나리오). 노드 클릭 → 파일·엔드포인트·ENV·연관 노드. **ENV 스위치** 패널(on/off, 0/1/3, 모드). |
+| **아키텍처** | 11장면 — 개요, 프론트/백엔드, 보안·CORS, ENV 매트릭스, API 표면, 배포, 운영 서버(구성 · 방화벽 · 점검), 통신 4갈래. |
 | **결제·DB** | 20장면 — 신청→위젯→승인(Tx1/토스/Tx2), fail URL, FAILED/UNKNOWN, 재결제, 상태표, ProcessLog, Admin 환불. |
 | **GitDiagram** | [gitdiagram.com](https://gitdiagram.com) 스타일 FE/BE 플로우 (외부 URL 연동). |
 
@@ -95,6 +95,9 @@ src/
 - 결제 승인: `PaymentConfirmService` — Tx1 → Toss HTTP(트랜잭션 밖) → Tx2, UNKNOWN/FAILED 분기, Idempotency-Key 등 반영.
 - 정원: `Reservation` HELD → PROCESSING → CONSUMED; 시간 기반 자동 만료 스케줄러는 **없음** (미결제 정리는 관리자 API 등).
 - 배포: 테스트 EC2 · 운영 Cafe24 Hybrid Managed Node + SSM, `API-KEY.yml` age 배치 등 통합 지도에 반영.
+- 운영 서버: Cafe24 개발언어 VPS(DEV D, Ubuntu 24.04) 패널 화면 기준 — 사양, 방화벽(80·443 공개, 22·3306 관리 IP 제한), 호스트 Nginx, MariaDB 11.4, 기본 systemd 스택.
+  - 서버 IP · 허용 IP · 계정 아이디는 **일부러 넣지 않았습니다** (공개 저장소).
+  - compose 파일 · Nginx 설정은 서버에만 있어, 지도에서 **점선**으로 그린 연결(80 포트 주인, `/api` 라우팅, DB 연결 대상 등)은 서버에서 확인이 필요합니다. 아키텍처 탭 「A10 · CHECK」에 확인 명령을 정리했습니다.
 
 ---
 
