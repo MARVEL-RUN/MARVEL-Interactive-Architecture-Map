@@ -1,6 +1,7 @@
 "use client";
 
 import { WireIcon } from "@/components/WireIcon";
+import { WIRE_NODE_MAP } from "@/data/integrated";
 import { ENV_SWITCHES, ENV_SWITCH_MAP } from "@/data/switches";
 import styles from "./wire.module.css";
 
@@ -45,19 +46,31 @@ export function EnvSwitchPanel({ switchId, picked, onOpen, onPick, onClose }: Pr
             영향받는 곳을 보여 줍니다.
           </p>
           <div className={styles.switchList}>
-            {ENV_SWITCHES.map((s) => (
-              <button key={s.id} type="button" onClick={() => onOpen(s.id)}>
-                <span className={styles.switchSide} data-side={s.side}>
-                  {s.side === "frontend" ? "FE" : "BE"}
-                </span>
-                <span className={styles.switchText}>
-                  <b>{s.title}</b>
-                  <code>
-                    {s.name} = {s.values.map((v) => v.value || "∅").join(" | ")}
-                  </code>
-                </span>
-              </button>
-            ))}
+            {ENV_SWITCHES.map((s) => {
+              const value = s.values.find((v) => v.value === (picked[s.id] ?? s.fallback));
+              const isOff = Boolean(value?.off?.length);
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={isOff ? styles.switchItemOff : undefined}
+                  onClick={() => onOpen(s.id)}
+                >
+                  <span className={styles.switchSide} data-side={s.side}>
+                    {s.side === "frontend" ? "FE" : "BE"}
+                  </span>
+                  <span className={styles.switchText}>
+                    <b>
+                      {s.title}
+                      {isOff ? <em className={styles.offTag}>OFF</em> : null}
+                    </b>
+                    <code>
+                      {s.name} = {s.values.map((v) => v.value || "∅").join(" | ")}
+                    </code>
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </>
       ) : (
@@ -70,6 +83,19 @@ export function EnvSwitchPanel({ switchId, picked, onOpen, onPick, onClose }: Pr
         />
       )}
     </aside>
+  );
+}
+
+function NodeChips({ title, ids, off }: { title: string; ids: string[]; off?: boolean }) {
+  return (
+    <div className={styles.switchChips}>
+      <span>{title}</span>
+      {ids.map((id) => (
+        <em key={id} className={off ? styles.chipOff : styles.chipOn}>
+          {WIRE_NODE_MAP.get(id)?.label ?? id}
+        </em>
+      ))}
+    </div>
   );
 }
 
@@ -108,7 +134,11 @@ function SwitchDetail({
             </button>
           ))}
         </div>
-        <p className={styles.switchEffect}>{current.effect}</p>
+        <p className={`${styles.switchEffect} ${current.off?.length ? styles.switchEffectOff : ""}`}>
+          {current.effect}
+        </p>
+        {current.off?.length ? <NodeChips title="꺼지는 곳" ids={current.off} off /> : null}
+        {current.nodes?.length ? <NodeChips title="켜지는 곳" ids={current.nodes} /> : null}
       </section>
 
       <section className={styles.drawerSection}>

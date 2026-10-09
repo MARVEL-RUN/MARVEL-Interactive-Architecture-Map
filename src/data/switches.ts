@@ -10,6 +10,8 @@ export type SwitchValue = {
   effect: string;
   /** Extra nodes lit only for this value. */
   nodes?: string[];
+  /** Nodes that stop working with this value — drawn red on the map. */
+  off?: string[];
 };
 
 export type EnvSwitch = {
@@ -49,6 +51,7 @@ export const ENV_SWITCHES: EnvSwitch[] = [
         label: "coming-soon",
         effect:
           "`/`와 (main) 레이아웃이 ComingSoon만 렌더합니다. BGM·사이트 줌이 꺼지고 404도 헤더 없이 나옵니다. 단, /entry-preview/** 경로는 미리보기로 본 페이지를 그대로 보여 줍니다.",
+        off: ["p-register", "p-payment", "p-success", "p-fail", "p-lookup", "p-community"],
       },
       {
         value: "main",
@@ -90,6 +93,7 @@ export const ENV_SWITCHES: EnvSwitch[] = [
         value: "0",
         label: "0 · 강제 닫힘",
         effect: "시각과 상관없이 접수 화면을 막습니다. 참가신청·결제·신청조회 페이지가 게이트에 걸립니다.",
+        off: ["p-register", "p-payment", "p-lookup"],
       },
       {
         value: "1",
@@ -129,7 +133,7 @@ export const ENV_SWITCHES: EnvSwitch[] = [
     files: ["MARVEL-RUN/src/lib/main/config.ts (BGM_SRC)", "MARVEL-RUN/src/app/layout.tsx"],
     values: [
       { value: "on", label: "on", effect: "/audio/bgm.mp3를 재생합니다. 미설정도 on과 같습니다." },
-      { value: "off", label: "off", effect: "BgmPlayer를 렌더하지 않습니다." },
+      { value: "off", label: "off", effect: "BgmPlayer를 렌더하지 않습니다. 지도에 따로 그린 노드는 없고 홈 화면의 플레이어만 사라집니다." },
       {
         value: "/audio/…",
         label: "/audio/… 경로",
@@ -163,7 +167,8 @@ export const ENV_SWITCHES: EnvSwitch[] = [
       {
         value: "0",
         label: "0 · 끔",
-        effect: "환불 버튼이 사라지고 환불 요청을 보내지 않습니다. 단체 결제 조정도 막힙니다.",
+        effect: "환불 버튼이 사라지고 환불 요청을 보내지 않습니다. 단체 결제 조정도 막힙니다. 백엔드 환불 API 자체는 그대로 있습니다.",
+        off: ["ac-refund", "s-refund"],
       },
       {
         value: "(그 외)",
@@ -191,7 +196,8 @@ export const ENV_SWITCHES: EnvSwitch[] = [
         value: "",
         label: "비어 있음",
         effect:
-          "신청 제출·신청조회가 \"API 주소가 설정되지 않았습니다\" 오류를 냅니다. mainFetch는 status 0으로 즉시 실패합니다.",
+          "신청 제출·신청조회가 \"API 주소가 설정되지 않았습니다\" 오류를 냅니다. mainFetch는 status 0으로 즉시 실패하므로 공지·문의·결제 승인 호출도 함께 멈춥니다.",
+        off: ["l-mainfetch", "api-user", "c-registration", "c-query", "c-modify", "c-payment", "c-event", "c-community"],
       },
       {
         value: "url",
@@ -217,6 +223,7 @@ export const ENV_SWITCHES: EnvSwitch[] = [
         label: "비어 있음",
         effect:
           "결제 버튼에서 \"결제 연동 설정(NEXT_PUBLIC_API_BASE_URL, NEXT_PUBLIC_TOSS_CLIENT_KEY)이 필요합니다\" 오류가 납니다. 신청조회의 재결제도 막힙니다.",
+        off: ["l-toss", "x-toss", "p-payment"],
       },
       {
         value: "test_ck_…",
@@ -272,6 +279,7 @@ export const ENV_SWITCHES: EnvSwitch[] = [
         effect:
           "로그인이 서버 확인 없이 가짜 토큰(mr-dev-…, local-admin)으로 통과합니다. 신청·단체·정원·문의 목록 쿼리는 비활성이라 빈 화면입니다. refresh도 하지 않습니다.",
         nodes: ["l-localstore"],
+        off: ["l-adminfetch", "api-admin", "ac-auth", "s-adminauth"],
       },
       {
         value: "url",
@@ -330,6 +338,7 @@ export const ENV_SWITCHES: EnvSwitch[] = [
         value: "OBJECT_STORAGE",
         label: "OBJECT_STORAGE",
         effect: "enum에는 있지만 구현체가 없어 AttachmentStorageNotFoundException이 납니다.",
+        off: ["d-files"],
       },
     ],
     fallback: "LOCAL",

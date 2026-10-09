@@ -95,11 +95,14 @@ export function WireExperience() {
     const sw = envOpen && envId ? ENV_SWITCH_MAP.get(envId) : undefined;
     if (!sw) return null;
     const value = sw.values.find((v) => v.value === (envPicked[sw.id] ?? sw.fallback));
-    const nodes = new Set([...sw.nodes, ...(value?.nodes ?? [])]);
-    const edges = new Set(
-      WIRE_EDGES.filter((e) => nodes.has(e.from) && nodes.has(e.to)).map((e) => e.id),
+    const off = new Set(value?.off ?? []);
+    const nodes = new Set([...sw.nodes, ...(value?.nodes ?? []), ...off]);
+    const live = WIRE_EDGES.filter((e) => nodes.has(e.from) && nodes.has(e.to));
+    const edges = new Set(live.map((e) => e.id));
+    const offEdges = new Set(
+      live.filter((e) => off.has(e.from) || off.has(e.to)).map((e) => e.id),
     );
-    return { key: `${sw.id}:${value?.value ?? ""}`, nodes, edges };
+    return { key: `${sw.id}:${value?.value ?? ""}`, nodes, edges, off, offEdges };
   }, [envOpen, envId, envPicked]);
 
   const openEnv = useCallback(
@@ -373,6 +376,8 @@ export function WireExperience() {
                 primaryEdgeId={envHighlight ? null : curPrimary}
                 activeNodes={envHighlight?.nodes ?? wire.activeNodes}
                 focusNodes={envHighlight?.nodes ?? (selected ? EMPTY : wire.focusNodes)}
+                offNodes={envHighlight?.off}
+                offEdges={envHighlight?.offEdges}
                 selectedId={selected}
                 playing={wire.playing}
                 onSelect={selectNode}

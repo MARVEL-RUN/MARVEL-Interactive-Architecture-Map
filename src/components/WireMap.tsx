@@ -48,6 +48,9 @@ type Props = {
   activeNodes: Set<string>;
   /** Nodes on the current step — get an extra ring. */
   focusNodes?: Set<string>;
+  /** Nodes switched off by the current ENV value — drawn red. */
+  offNodes?: Set<string>;
+  offEdges?: Set<string>;
   selectedId?: string | null;
   playing: boolean;
   onSelect?: (id: string | null) => void;
@@ -74,6 +77,8 @@ export function WireMap({
   primaryEdgeId,
   activeNodes,
   focusNodes,
+  offNodes,
+  offEdges,
   selectedId,
   playing,
   onSelect,
@@ -114,7 +119,8 @@ export function WireMap({
           const a = nodeMap.get(edge.from);
           const b = nodeMap.get(edge.to);
           if (!a || !b) return null;
-          const live = liveEdges.has(edge.id);
+          const off = offEdges?.has(edge.id) ?? false;
+          const live = liveEdges.has(edge.id) && !off;
           const isPrimary = primaryEdgeId === edge.id;
           const d = edgePath(a, b);
           return (
@@ -127,7 +133,7 @@ export function WireMap({
                 fill="none"
                 className={`${styles.gitEdge} ${edge.dashed ? styles.gitEdgeDashed : ""} ${
                   live ? styles.gitEdgeLive : ""
-                }`}
+                } ${off ? styles.gitEdgeOff : ""}`}
               />
               {live ? (
                 <path
@@ -149,10 +155,12 @@ export function WireMap({
           type="button"
           className={`${styles.gitNodeWrap} ${
             focusNodes?.has(node.id) ? styles.nodeFocus : ""
-          } ${selectedId === node.id ? styles.nodeSelected : ""}`}
+          } ${selectedId === node.id ? styles.nodeSelected : ""} ${
+            offNodes?.has(node.id) ? styles.nodeOff : ""
+          }`}
           style={{ left: node.x, top: node.y }}
           onClick={pick(node.id)}
-          aria-label={`${node.label} 자세히 보기`}
+          aria-label={`${node.label}${offNodes?.has(node.id) ? " (꺼짐)" : ""} 자세히 보기`}
         >
           <NodeCard
             label={node.label}
