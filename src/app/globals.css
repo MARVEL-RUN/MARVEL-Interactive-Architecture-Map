@@ -1,0 +1,26 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+body {
+  font-family: var(--font-space), system-ui, sans-serif;
+  background: #121212;
+  color: #f2f2f2;
+  -webkit-font-smoothing: antialiased;
+}
+
+code,
+pre,
+.mono {
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
